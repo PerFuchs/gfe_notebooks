@@ -6,12 +6,16 @@ DROP VIEW IF EXISTS view_latency_inserts;
 DROP VIEW IF EXISTS view_latency_updates;
 DROP VIEW IF EXISTS view_graphalytics_inserts; /* dependency on view_insert_only */
 DROP VIEW IF EXISTS view_inserts;
+DROP VIEW IF EXISTS view_inserts_analytics;
 DROP VIEW IF EXISTS view_graphalytics_updates; /* dependency on view_aging */
 DROP VIEW IF EXISTS view_updates_progress;
 DROP VIEW IF EXISTS view_updates;
 DROP VIEW IF EXISTS view_updates0;
 DROP VIEW IF EXISTS view_graphalytics_load;
 DROP VIEW IF EXISTS view_executions; /* Keep at the end due to dependencies */
+DROP VIEW IF EXISTS view_updates_throughput;
+DROP VIEW IF EXISTS view_updates_memory_footprint;
+DROP VIEW IF EXISTS view_graphalytics_profiler_inserts;
 
 /**
  * The first view to create!
@@ -70,29 +74,42 @@ SELECT
                   WHEN(INSTR(e.hostname, "rocks2") > 0) THEN 'rocks2'
                   WHEN(INSTR(e.hostname, "diamonds") > 0) THEN 'diamonds'
                   WHEN(INSTR(e.hostname, "bricks") > 0) THEN 'bricks'
+                  WHEN(INSTR(e.hostname, "scyper22") > 0) THEN 'scyper22'
+                  WHEN(INSTR(e.hostname, "scyper21") > 0) THEN 'scyper21'
+                  WHEN(INSTR(e.hostname, "scyper15") > 0) THEN 'scyper15'
                   ELSE 'unknown' END
          ELSE
              CASE WHEN(INSTR(e.server_host, "stones2") > 0) THEN 'stones2'
                   WHEN(INSTR(e.server_host, "rocks2") > 0) THEN 'rocks2'
                   WHEN(INSTR(e.server_host, "diamonds") > 0) THEN 'diamonds'
                   WHEN(INSTR(e.server_host, "bricks") > 0) THEN 'bricks'
+                  WHEN(INSTR(e.hostname, "scyper22") > 0) THEN 'scyper22'
+                  WHEN(INSTR(e.hostname, "scyper21") > 0) THEN 'scyper21'
+                  WHEN(INSTR(e.hostname, "scyper15") > 0) THEN 'scyper15'
                   ELSE 'unknown' END
         END AS 'cluster',
     e.git_commit AS 'git_commit',
     COALESCE(aging_impl, 'version_1') AS 'aging_impl',
     e.time_start,
-    e.time_end
+    e.time_end,
+    COALESCE(CAST(e.block_size AS INT), -1) AS block_size
 FROM executions e
          LEFT JOIN insert_only is_insert_only ON is_insert_only.exec_id = e.id
          LEFT JOIN aging is_aging ON is_aging.exec_id = e.id
+WHERE
 /*
     17/Mar/2019 - Remove all the executions of GraphOne with S.F. 26 that were executed before this date. There was an
     issue with the vertex dictionary. It is statically allocated in the GraphOne library (not in the driver) and it did
     not have enough space to store all vertices, causing a memory overflow.
     Bug fixed in commit 0143b4ec on 17/Mar/2019, graphone library (not gfe driver), branch feature/gfe
  */
-WHERE
-    NOT (graph LIKE '%-26.properties' AND library LIKE 'g1-%' AND time_start < '2020-03-17')
+
+        NOT (graph LIKE '%-26.properties' AND library LIKE 'g1-%' AND time_start < '2020-03-17')
+    AND
+/*
+    The runs on dota-legaue between the 2021-05-12 and 2021-05-18 on the Scyper servers showed inconsistent results.
+*/
+        NOT (graph LIKE '%dota-league.properties' AND (e.hostname = 'scyper22' or e.hostname = 'scyper21') AND time_start < '2021-05-18')
 ;
 
 /**
@@ -127,10 +144,12 @@ SELECT
     100.0 * (io.insertion_time) / (io.insertion_time + io.build_time) AS insertion_time_perc,
     io.build_time AS build_time_usecs, /* total time to build the *last* snapshot in LLAMA */
     100.0 * (io.build_time) / (io.insertion_time + io.build_time) AS build_time_perc,
-    io.insertion_time + io.build_time AS completion_time_usecs /* microsecs */
+    io.insertion_time + io.build_time AS completion_time_usecs, /* microsecs */
+    e.block_size
 FROM view_executions e JOIN insert_only io ON(e.exec_id = io.exec_id)
 WHERE e.mode = 'standalone'
 ;
+
 
 /**
  * Retrieve the results from the experiment `graphalytics', after the graph
@@ -146,6 +165,7 @@ SELECT
   i.compiler,
   i.build_frequency_millisecs, /* this needs to be accounted for llama */
   i.num_snapshots_created, /* as above */
+  e.hostname,
   e.num_threads_read AS num_threads_read,
   e.num_threads_write AS num_threads_write,
   e.num_threads_omp AS omp_threads,
@@ -160,7 +180,8 @@ SELECT
   s.p99 AS p99_usecs,
   s.num_trials,
   s.num_timeouts,
-  s.num_trials = s.num_timeouts AS is_all_timeout
+  s.num_trials = s.num_timeouts AS is_all_timeout,
+  e.block_size
 FROM view_inserts i
   JOIN statistics s ON( i.exec_id = s.exec_id )
   JOIN view_executions e ON ( i.exec_id = e.exec_id )
@@ -238,7 +259,7 @@ CREATE VIEW view_updates_progress AS
 WITH
     /*
        For some reason, sometimes it does not save in aging_intermediate_throughput the progress for the last chunk (typically 10),
-       but we can infer it from the total execution time in the table `aging' (or view_updates). It is not the same as if it was
+       but we can infer it from the total execution time in the table 'aging' (or view_updates). It is not the same as if it was
        reported in the table aging_intermediate_throughput though, especially in delta stores, because in this other case it also
        includes the time to build a new snapshot and terminate the worker threads in the experiment.
      */
@@ -268,11 +289,12 @@ SELECT
     e.num_threads_write AS num_threads,
     e.num_threads_omp AS omp_threads,
     e.has_latency,
+    e.hostname,
     ROUND(d.aging_coeff * e.aging_step, 2) AS progress, -- normalise the progress
     d.completion_time AS completion_time_usecs,
     d.delta AS delta_usecs
 FROM view_executions e, deltas d
-WHERE e.exec_id = d.exec_id AND e.aging_impl IN ('version_2', 'version_3') AND e.mode = 'standalone'
+WHERE e.exec_id = d.exec_id AND e.aging_impl IN ('version_2', 'version_3') AND e.mode = 'standalone' AND e.hostname = 'scyper15'
 ;
 
 /**
@@ -292,7 +314,9 @@ SELECT
     a.second,
     a.num_operations,
     COALESCE(a.num_operations - (LAG(a.num_operations) OVER (PARTITION BY a.exec_id ORDER BY a.second)), a.num_operations) as throughput
-FROM aging_intermediate_throughput3 a JOIN view_executions e on a.exec_id = e.exec_id;
+FROM aging_intermediate_throughput3 a JOIN view_executions e on a.exec_id = e.exec_id
+WHERE e.hostname = "scyper15"
+;
 
 /**
  * Report the memory footprint, in bytes, during the updates, every 10 secs.
@@ -309,13 +333,14 @@ SELECT
     e.num_threads_write AS num_threads,
     e.num_threads_omp AS omp_threads,
     e.has_latency,
+    e.hostname,
     mem.tick AS second,
     (CAST( ait3.num_operations AS REAL ) / (SELECT u.num_updates FROM aging u WHERE u.exec_id = ait3.exec_id)) AS progress, /* in [0, 1] */
     (mem.memfp_process - mem.memfp_driver) AS memory_usage_bytes
 FROM aging_intermediate_memory_usage_v2 mem
          JOIN view_executions e on mem.exec_id = e.exec_id
          JOIN aging_intermediate_throughput3 ait3 ON (ait3.exec_id = mem.exec_id AND ait3.second = mem.tick)
-WHERE mem.cooloff = 0
+WHERE e.hostname = 'scyper15' AND mem.cooloff = 0
 ;
 
 /**
@@ -459,6 +484,7 @@ SELECT
     e.is_directed,
     e.compiler_family,
     e.compiler,
+    e.hostname,
     e.num_threads_read AS num_threads_read,
     e.num_threads_omp AS omp_threads,
     s.type AS algorithm,
