@@ -1,5 +1,8 @@
 # The database with the results is too big to be stored in this repository
 data/data21.sqlite3
+data/results-scyper22.sqlite3
+data/results-scyper21.sqlite3
+data/results-scyper15.sqlite3
 
 # Python machinery
 .ipynb_checkpoints/
