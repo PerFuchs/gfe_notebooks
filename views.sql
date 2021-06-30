@@ -92,7 +92,9 @@ SELECT
     COALESCE(aging_impl, 'version_1') AS 'aging_impl',
     e.time_start,
     e.time_end,
-    COALESCE(CAST(e.block_size AS INT), -1) AS block_size
+    COALESCE(CAST(e.block_size AS INT), -1) AS block_size,
+    e.validate_inserts,
+    e.validate_output
 FROM executions e
          LEFT JOIN insert_only is_insert_only ON is_insert_only.exec_id = e.id
          LEFT JOIN aging is_aging ON is_aging.exec_id = e.id
@@ -181,7 +183,13 @@ SELECT
   s.num_trials,
   s.num_timeouts,
   s.num_trials = s.num_timeouts AS is_all_timeout,
-  e.block_size
+  e.block_size,
+  e.validate_inserts,
+  e.validate_output,
+  e.num_validation_errors,
+  e.time_start,
+  e.time_end,
+  e.exec_id
 FROM view_inserts i
   JOIN statistics s ON( i.exec_id = s.exec_id )
   JOIN view_executions e ON ( i.exec_id = e.exec_id )
@@ -304,6 +312,7 @@ CREATE VIEW view_updates_throughput AS
 SELECT
     e.exec_id,
     e.library,
+    e.hostname,
     e.cluster,
     e.aging,
     e.client_graph,
@@ -313,9 +322,10 @@ SELECT
     e.has_latency,
     a.second,
     a.num_operations,
-    COALESCE(a.num_operations - (LAG(a.num_operations) OVER (PARTITION BY a.exec_id ORDER BY a.second)), a.num_operations) as throughput
+    COALESCE(a.num_operations - (LAG(a.num_operations) OVER (PARTITION BY a.exec_id ORDER BY a.second)), a.num_operations) as throughput,
+    (CAST(num_operations AS REAL ) / (SELECT u.num_updates FROM aging u WHERE u.exec_id = e.exec_id)) AS progress /* in [0, 1] */
 FROM aging_intermediate_throughput3 a JOIN view_executions e on a.exec_id = e.exec_id
-WHERE e.hostname = "scyper15"
+Where e.hostname = "scyper21" or e.hostname = "scyper22"
 ;
 
 /**
@@ -340,7 +350,7 @@ SELECT
 FROM aging_intermediate_memory_usage_v2 mem
          JOIN view_executions e on mem.exec_id = e.exec_id
          JOIN aging_intermediate_throughput3 ait3 ON (ait3.exec_id = mem.exec_id AND ait3.second = mem.tick)
-WHERE e.hostname = 'scyper15' AND mem.cooloff = 0
+WHERE (e.hostname = "scyper21" or e.hostname = "scyper22") AND mem.cooloff = 0
 ;
 
 /**
@@ -359,6 +369,8 @@ SELECT
   u.compiler,
   e.num_threads_read AS num_threads,
   e.num_threads_omp AS omp_threads,
+  e.block_size,
+  e.hostname,
   s.type AS algorithm,
   s.mean AS mean_usecs,
   s.median AS median_usecs,
@@ -498,7 +510,10 @@ SELECT
     s.p99 AS p99_usecs,
     s.num_trials,
     s.num_timeouts,
-    s.num_trials = s.num_timeouts AS is_all_timeout
+    s.num_trials = s.num_timeouts AS is_all_timeout,
+    e.validate_output,
+    e.validate_inserts,
+    e.exec_id
 FROM statistics s
          JOIN view_executions e ON ( s.exec_id = e.exec_id )
 WHERE e.experiment = 'load'
