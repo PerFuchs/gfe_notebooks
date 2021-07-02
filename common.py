@@ -70,8 +70,8 @@ def import_gfe_dbms(sql_or_table, datasource):
         if pd.api.types.is_timedelta64_dtype( df[column] ):
             df[column + "_secs"] = df[column].apply(lambda x: x.total_seconds()) # create the new column
             columns = columns.insert(index +1, column + "_secs") # reposition the new column just after the previous one
-    df = df[ columns ] # reorder the columns        
-            
+    df = df[ columns ] # reorder the columns
+
     # connection.close()
     return df
 
@@ -172,7 +172,7 @@ def aging_medians(df = None):
     '''
     Return for each library, graph and parallelism degree, the execution (exec_id) that accomplished the median throughput. The
     exec_id can be further used to pick the execution to portray in the plot for the throughput over time.
-    
+
     :param df: an instance of view_updates_throughput, properly filtered
     :return: a table with the median throughput of each execution
     '''
@@ -224,7 +224,7 @@ def edges_per_graph():
     '''
     Retrieve the number of vertices and edges in each graph evaluated
     '''
-    
+
     data = pd.DataFrame({
         "graph": ["dota-league", "graph500-22", "uniform-22", "graph500-24", "uniform-24", "graph500-25", "uniform-25", "graph500-26", "uniform-26"],
         "num_vertices": [61170, 2396657, 2396657, 8870942, 8870942, 17062472, 17062472, 32804978, 32804978],
@@ -246,3 +246,47 @@ def fmtlabel(value):
         return "{:.2f} k".format(value / 10**3)
     else:
         return "{:.2f}".format(value)
+
+
+
+def set_library_colormap(graph):
+    color_dict = {('graphone', graph):'red',
+                  'graphone':'red',
+                  'g1_v6-ref-ignore-build':'red',
+                  ('sortledton', graph):'blue',
+                  'sortledton':'blue',
+                  'sortledton.1':'blue',
+                  ('llama', graph):'limegreen',
+                  'llama':'limegreen',
+                  'llama8-ref':'limegreen',
+                  ('teseo_logical', graph):'mediumorchid',
+                  'teseo_logical':'mediumorchid',
+                  ('teseo_real', graph):'darkkhaki',
+                  'teseo_real':'darkkhaki',
+                  'teseo':'darkkhaki',
+                  'teseo-lcc.12':'mediumorchid',
+                  ('stinger', graph):'black',
+                  'stinger':'black',
+                  'stinger7-ref':'black',
+                  ('livegraph', graph):'darkturquoise',
+                  'livegraph':'darkturquoise',
+                  'livegraph3_ro':'darkturquoise',
+                  'linear':'black'}
+
+    return color_dict
+
+
+def set_algorithm_colormap():
+    color_dict = {'BFS':'blue',
+                  'bfs':'blue',
+                  'cdlp':'darkkhaki',
+                  'PageRank':'green',
+                  'pagerank':'green',
+                  'WCC':'red',
+                  'wcc':'red',
+                  'SSSP':'darkturquoise',
+                  'sssp':'darkturquoise',
+                  'LCC':'mediumorchid',
+                  'lcc':'mediumorchid'}
+
+    return color_dict
