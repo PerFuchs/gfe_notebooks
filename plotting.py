@@ -248,7 +248,7 @@ def format_axes(ax, xscale='linear', yscale='linear'):
     
     ax.yaxis.set_ticks_position('left')
     ax.yaxis.set_tick_params(direction='out', color=spine_color)
-    ax.yaxis.grid(b=True, which='both')
+    ax.yaxis.grid(b=True, which='major')
 
     ax.tick_params(axis='both', which='major', pad=0.5)
 
@@ -256,7 +256,7 @@ def format_axes(ax, xscale='linear', yscale='linear'):
 
 
 def add_line_on_1(plot):
-    plot.axhline(y = 1, color="black", linestyle = '-', linewidth=2)
+    plot.axhline(y = 1, color="black", linestyle = '-', linewidth=0.9)
 
 def barAxes(ax):
     ax.set_axisbelow(True)
