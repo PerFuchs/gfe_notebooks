@@ -234,7 +234,7 @@ def latexify(fig_width=None, fig_height=None, columns=1):
     matplotlib.rcParams.update(params)
 
 
-def format_axes(ax, xscale='linear', yscale='linear'):
+def format_axes(ax, xscale='linear', yscale='linear', categorical_x=False):
     spine_color = 'black'
     for spine in ['top', 'right']:
         ax.spines[spine].set_visible(False)
@@ -247,8 +247,17 @@ def format_axes(ax, xscale='linear', yscale='linear'):
     ax.xaxis.set_tick_params(direction='out', color=spine_color)
     
     ax.yaxis.set_ticks_position('left')
-    ax.yaxis.set_tick_params(direction='out', color=spine_color)
-    ax.yaxis.grid(b=True, which='major')
+    ax.yaxis.set_tick_params(direction='out', which="major", color=spine_color)
+    ax.yaxis.set_tick_params(left=False, right=False, which="minor")
+    ax.yaxis.grid(b=True, which='both')
+    
+    if categorical_x:
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False)
+
 
     ax.tick_params(axis='both', which='major', pad=0.5)
 
