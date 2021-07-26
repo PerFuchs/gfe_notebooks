@@ -263,7 +263,7 @@ def set_library_colormap(graph):
                   'teseo_logical':'mediumorchid',
                   ('teseo_real', graph):'darkkhaki',
                   'teseo_real':'darkkhaki',
-                  'teseo':'darkkhaki',
+                  'teseo':'mediumorchid',
                   'teseo-lcc.12':'mediumorchid',
                   ('stinger', graph):'black',
                   'stinger':'black',
