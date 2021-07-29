@@ -178,7 +178,7 @@ from matplotlib.patches import Rectangle
 import numpy as np
 
 
-def latexify(fig_width=None, fig_height=None, columns=1):
+def latexify(fig_width=None, fig_height=None, columns=1, font_size=None):
     """Set up matplotlib's RC params for LaTeX plotting.
     Call this before plotting a figure.
 
@@ -214,19 +214,22 @@ def latexify(fig_width=None, fig_height=None, columns=1):
               "so will reduce to" + MAX_HEIGHT_INCHES + "inches.")
         fig_height = MAX_HEIGHT_INCHES
 
+    if font_size is None:
+        font_size = 8
+
     params = {'backend': 'ps',
               'pgf.rcfonts': False,
-              'axes.labelsize': 8,  # fontsize for x and y labels (was 10)
-              'axes.titlesize': 8,
-              'font.size': 8,  # was 10
+              'axes.labelsize': font_size,  # fontsize for x and y labels (was 10)
+              'axes.titlesize': font_size,
+              'font.size': font_size,  # was 10
               'legend.fontsize': 6,  # was 8 # was 10
               'legend.handlelength': 1.5,
               'legend.handletextpad': 0.3,
               'legend.labelspacing': 0.1, # was 0.1
               'legend.columnspacing': 0.3,
               'legend.borderpad': 0.3,
-              'xtick.labelsize': 7,
-              'ytick.labelsize': 7,
+              'xtick.labelsize': font_size,
+              'ytick.labelsize': font_size,
               'axes.labelpad': 1,
               'axes.titlepad': 2,
               'text.usetex': True,
