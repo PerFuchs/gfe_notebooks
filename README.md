@@ -2,7 +2,7 @@
 
 This repository contains the Jupyter notebooks used to analyse and to generate the plots featured in the Sortledton paper.
 
-After downloading repository, fetch the database with the results from [Zenodo](https://zenodo.org/record/) and place it into data/data21.sqlite3. It is a 600 MB database and it was a bit too much to store it in this repository.
+After downloading repository, fetch the database with the results from [Zenodo](https://zenodo.org/record/5155577) and place it into data/data21.sqlite3. It is a 600 MB database and it was a bit too much to store it in this repository.
 
 The content of this repository: 
 * automerge.pl: A script to load the results of new experiment executions into the database data/data21.sqlite3
