@@ -16,6 +16,9 @@ DROP VIEW IF EXISTS view_executions; /* Keep at the end due to dependencies */
 DROP VIEW IF EXISTS view_updates_throughput;
 DROP VIEW IF EXISTS view_updates_memory_footprint;
 DROP VIEW IF EXISTS view_graphalytics_profiler_inserts;
+DROP VIEW IF EXISTS view_graphalytics_mixed;
+DROP VIEW IF EXISTS view_mixed;
+DROP VIEW IF EXISTS view_updates_mean;
 
 /**
  * The first view to create!
@@ -94,7 +97,8 @@ SELECT
     e.time_end,
     COALESCE(CAST(e.block_size AS INT), -1) AS block_size,
     e.validate_inserts,
-    e.validate_output
+    e.validate_output,
+    COALESCE(CAST(e.is_mixed_workload AS INT), 0) AS is_mixed_workload
 FROM executions e
          LEFT JOIN insert_only is_insert_only ON is_insert_only.exec_id = e.id
          LEFT JOIN aging is_aging ON is_aging.exec_id = e.id
@@ -275,6 +279,7 @@ WITH
         SELECT u.exec_id, ROUND(u.aging / e.aging_step, 2) AS aging_coeff, u.completion_time_usecs AS completion_time
         FROM view_updates u JOIN view_executions e ON (u.exec_id = e.exec_id)
         WHERE NOT EXISTS ( SELECT 1 FROM aging_intermediate_throughput i WHERE u.exec_id = i.exec_id AND ROUND(u.aging / e.aging_step, 2) = i.aging_coeff)
+          and u.is_mixed_workload = 0
         UNION ALL
         SELECT exec_id, aging_coeff, completion_time
         FROM aging_intermediate_throughput
@@ -302,7 +307,7 @@ SELECT
     d.completion_time AS completion_time_usecs,
     d.delta AS delta_usecs
 FROM view_executions e, deltas d
-WHERE e.exec_id = d.exec_id AND e.aging_impl IN ('version_2', 'version_3') AND e.mode = 'standalone' AND e.hostname = 'scyper15'
+WHERE e.exec_id = d.exec_id AND e.aging_impl IN ('version_2', 'version_3') AND e.mode = 'standalone' AND e.is_mixed_workload = 0
 ;
 
 /**
@@ -320,13 +325,33 @@ SELECT
     e.num_threads_write AS num_threads,
     e.num_threads_omp AS omp_threads,
     e.has_latency,
+    e.is_mixed_workload,
     a.second,
     a.num_operations,
     COALESCE(a.num_operations - (LAG(a.num_operations) OVER (PARTITION BY a.exec_id ORDER BY a.second)), a.num_operations) as throughput,
     (CAST(num_operations AS REAL ) / (SELECT u.num_updates FROM aging u WHERE u.exec_id = e.exec_id)) AS progress /* in [0, 1] */
 FROM aging_intermediate_throughput3 a JOIN view_executions e on a.exec_id = e.exec_id
-Where e.hostname = "scyper21" or e.hostname = "scyper22"
+WHERE e.hostname = "scyper21" or e.hostname = "scyper22"
 ;
+
+CREATE VIEW view_updates_mean AS
+SELECT
+    t.exec_id,
+    e.hostname,
+    e.library,
+    e.client_graph,
+    e.num_threads_write,
+    e.num_threads_read,
+    e.is_mixed_workload as is_mixed_workload,
+    AVG(t.throughput) AS average_throughput
+FROM
+  view_updates_throughput as t
+JOIN view_executions as e ON t.exec_id = e.exec_id
+WHERE 
+  progress > 0.1 AND progress < 0.9  -- For mixed experiments, we only take into account throughput when both updates and analytics are
+  -- executed
+GROUP BY
+  t.exec_id;
 
 /**
  * Report the memory footprint, in bytes, during the updates, every 10 secs.
@@ -344,13 +369,14 @@ SELECT
     e.num_threads_omp AS omp_threads,
     e.has_latency,
     e.hostname,
+    e.is_mixed_workload,
     mem.tick AS second,
     (CAST( ait3.num_operations AS REAL ) / (SELECT u.num_updates FROM aging u WHERE u.exec_id = ait3.exec_id)) AS progress, /* in [0, 1] */
     (mem.memfp_process - mem.memfp_driver) AS memory_usage_bytes
 FROM aging_intermediate_memory_usage_v2 mem
          JOIN view_executions e on mem.exec_id = e.exec_id
          JOIN aging_intermediate_throughput3 ait3 ON (ait3.exec_id = mem.exec_id AND ait3.second = mem.tick)
-WHERE (e.hostname = "scyper21" or e.hostname = "scyper22") AND mem.cooloff = 0
+WHERE (e.hostname = "scyper21" or e.hostname = "scyper22") AND mem.cooloff = 0 AND e.is_mixed_workload = 0
 ;
 
 /**
@@ -387,7 +413,45 @@ FROM
   view_updates u
   JOIN statistics s ON( u.exec_id = s.exec_id )
   JOIN view_executions e ON ( s.exec_id = e.exec_id )
+WHERE
+  e.is_mixed_workload = 0
 ;
+
+CREATE VIEW view_mixed AS
+SELECT
+  u.exec_id,
+  u.library,
+  u.aging,
+  u.client_graph,
+  u.is_directed,
+  u.compiler_family,
+  u.compiler,
+  u.num_threads_read AS num_threads,
+  u.num_threads_omp AS omp_threads,
+  u.num_threads_write AS num_threads_write,
+  u.block_size,
+  u.hostname,
+  t.average_throughput AS throughput,
+  s.type AS algorithm,
+  s.mean AS mean_usecs,
+  s.median AS median_usecs,
+  s.min AS min_usecs,
+  s.max AS max_usecs,
+  s.p90 AS p90_usecs,
+  s.p95 AS p95_usecs,
+  s.p97 AS p97_usecs,
+  s.p99 AS p99_usecs,
+  s.num_trials,
+  s.num_timeouts,
+  s.num_trials = s.num_timeouts AS is_all_timeout
+FROM
+  view_executions u
+JOIN view_updates_mean t ON ( u.exec_id = t.exec_id )
+JOIN statistics s ON (u.exec_id = s.exec_id)
+WHERE
+  u.is_mixed_workload = 1
+;
+
 
 CREATE VIEW view_latency_inserts AS
 SELECT

@@ -2,6 +2,7 @@ import os
 
 
 base_path = os.environ['SORTLEDTON_PLOTS_DIR']
+presentation_base_path = "/home/per/workspace/sortledton-presentation/figures/"
 
 
 def blend(color, factor):
