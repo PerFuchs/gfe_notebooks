@@ -296,3 +296,26 @@ def reorderLegend(ax=None, order=None, unique=False):
     return handles, labels
 
 
+library_2_hatches = { 
+    'teseo-real': 'xxx',
+    'sortledton': '**',
+    'llama' : '----',
+    'teseo': '\\\\\\',
+    'graphone': '....',
+    'stinger': '+++',
+    'livegraph': '////'
+}
+
+def flatten(t):
+    return [item for sublist in t for item in sublist]
+
+
+def apply_hatches(library_or_algorithm_order, bars_per_element, hatch_desity, bars):
+    hatch_list = flatten([ (library_2_hatches[l] + library_2_hatches[l][0] * hatch_desity,) * bars_per_element for l in library_or_algorithm_order])
+    assert(len(hatch_list) == len(bars))
+    
+    for b, h in zip(bars, hatch_list):
+        b.set_hatch(h)
+  
+
+
