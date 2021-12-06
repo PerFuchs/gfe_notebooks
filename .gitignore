@@ -3,6 +3,7 @@ data/data21.sqlite3
 data/results-scyper22.sqlite3
 data/results-scyper21.sqlite3
 data/results-scyper15.sqlite3
+data/new.sqlite3
 
 # Python machinery
 .ipynb_checkpoints/
