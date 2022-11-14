@@ -1,6 +1,6 @@
 # Notebooks for Sortledton paper
 
-This repository contains the Jupyter notebooks used to analyse and to generate the plots featured in the Sortledton paper.
+This repository contains the Jupyter notebooks used to analyse and to generate the plots featured in the [Sortledton paper](https://www.vldb.org/pvldb/vol15/p1173-fuchs.pdf).
 
 After downloading repository, fetch the database with the results from [Zenodo](https://zenodo.org/record/5155577) and place it into data/data21.sqlite3. It is a 600 MB database and it was a bit too much to store it in this repository.
 
